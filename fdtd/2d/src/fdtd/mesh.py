@@ -67,31 +67,44 @@ class Mesh:
     def __init__(self, coordinates, elements, grid):
         self.coordinates = coordinates
         self.elements = elements
-        
+
+        _, posx, posy = self.positions(grid[0])
+        for g in grid[1:]:
+            box, pauxx, pauxy = self.positions(g)
+            posx = np.concatenate([posx[posx < box[0][X]],
+                                   pauxx,
+                                   posx[posx > box[1][X]]])
+            posy = np.concatenate([posy[posy < box[0][Y]],
+                                   pauxy,
+                                   posy[posy > box[1][Y]]])    
+        self.pos = (posx , posy)            
+
+        self.bounds = []
+        if "bounds" in grid[0]:
+            for xy in range(len(grid[0]["bounds"])):
+                for lu in range(len(grid[0]["bounds"][xy])):
+                    if grid[0]["bounds"][xy][lu] == "pec":
+                        self.bounds.append(Mesh.BoundPEC().idsAs(lu, xy))
+
+    def positions(self,grid):
         if "elemId" in grid:
             box = self.elemIdToBox(grid["elemId"])
-        elif "box" in grid:
-            box = grid["box"]
         else:
             raise ValueError("Grid data must contain \"elemId\" or \"box\".")
 
         (Lx, Ly) = abs(box[U] - box[L])
         (dx, dy) = grid["steps"]
-        self.pos =  \
-            (np.linspace(box[L][X], box[U][X], num=Lx/dx+1, endpoint=True),
-             np.linspace(box[L][Y], box[U][Y], num=Ly/dy+1, endpoint=True) )
-
-        self.bounds = []
-        if "bounds" in grid:
-            for xy in range(len(grid["bounds"])):
-                for lu in range(len(grid["bounds"][xy])):
-                    if grid["bounds"][xy][lu] == "pec":
-                        self.bounds.append(Mesh.BoundPEC().idsAs(lu, xy))
+        return  box, \
+                np.linspace(box[L][X], box[U][X], num=int(round(Lx/dx+1)), endpoint=True), \
+                np.linspace(box[L][Y], box[U][Y], num=int(round(Ly/dy+1)), endpoint=True) 
         
-                
     def steps(self):
-        return (self.pos[X][1]-self.pos[X][0], self.pos[Y][1]-self.pos[Y][0])
+        return np.array([(self.pos[X][1:]-self.pos[X][0:-1]),
+                         (self.pos[Y][1:]-self.pos[Y][0:-1])])
 
+    def hsteps(self):
+        return 0.5*np.array([(self.steps()[X][0:-1]+self.steps()[X][1:]),
+                             (self.steps()[Y][0:-1]+self.steps()[Y][1:])])
 
     def origin(self):
         return (self.pos[X][0], self.pos[Y][0])

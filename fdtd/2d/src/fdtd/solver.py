@@ -74,7 +74,8 @@ class Solver:
 
 
     def _dt(self):
-        return self.options["cfl"] * min(self._mesh.steps()) / math.sqrt(2.0)  
+        smallest = min(min(self._mesh.steps()[X]), min(self._mesh.steps()[Y]))
+        return self.options["cfl"] * smallest / math.sqrt(2.0)  
 
     def timeStep(self):
         return self._dt() / sp.speed_of_light
@@ -90,10 +91,9 @@ class Solver:
         (ex, ey, h) = self.old.get()
         e = (ex, ey)
 
-        (dX, dY) = self._mesh.steps()
-        A = dX * dY
-        eNew[X][:,1:-1] = e[X][:,1:-1] + dt/A*dX * (h[:,1:] - h[:,:-1])
-        eNew[Y][1:-1,:] = e[Y][1:-1,:] - dt/A*dY * (h[1:,:] - h[:-1,:])
+        (dX, dY) = self._mesh.hsteps()
+        eNew[X][:,1:-1] = e[X][:,1:-1] + dt/dY * (h[:,1:] - h[:,:-1])
+        eNew[Y][1:-1,:] = e[Y][1:-1,:] - dt/dX.reshape(-1,1) * (h[1:,:] - h[:-1,:])
 
         # Boundary conditions
         for bound in self._mesh.bounds:
@@ -117,13 +117,12 @@ class Solver:
         (ex, ey, h) = self.old.get()
         
         (dX, dY) = self._mesh.steps()
-        A = dX * dY
               
         hNew[:,:] = h[:,:] \
-                     - dt/A * dY * ey[1:,  :] \
-                     + dt/A * dX * ex[ :, 1:] \
-                     + dt/A * dY * ey[:-1,   :] \
-                     - dt/A * dX * ex[  :, :-1]
+                     - dt/dX.reshape(-1,1) * ey[1:,  :] \
+                     + dt/dY * ex[ :, 1:] \
+                     + dt/dX.reshape(-1,1) * ey[:-1,   :] \
+                     - dt/dY * ex[  :, :-1]
         
         # Source terms
         for source in self._sources:
